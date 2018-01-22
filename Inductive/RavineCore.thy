@@ -24,9 +24,6 @@ type_synonym type_sources = "type list"
 datatype mapping = Map type type_sources
 datatype state = State "mapping list"
 
-
-
-
 fun add_mapping' :: "mapping list \<Rightarrow> mapping \<Rightarrow> mapping list" where
 "add_mapping' Nil m = Cons m Nil" |
 "add_mapping' (Cons n N) m = Cons n (add_mapping' N m)" 
@@ -44,10 +41,8 @@ fun get_last_var_name :: "state \<Rightarrow> var_name optional" where
 "get_last_var_name (State (Cons n N)) = Some (get_last_var_name' n N)"
 *)
 
-
 fun update_mapping :: "state \<Rightarrow> mapping \<Rightarrow> var_name \<Rightarrow> state" where
 "update_mapping (State l) m name = State (list_update l m name)"
-
 
 inductive 
   is_last_var_name :: "state \<Rightarrow> var_name \<Rightarrow> bool"
@@ -156,19 +151,28 @@ is_mapped
 (*core language*)
 
 
-datatype expr = SKIP | INIT type var_name 
+datatype expr = NULL | NOP | INIT type var_name | SEQ expr expr | IF expr expr expr | SEC security expr
 
 inductive 
-  eval :: "(expr list * state) \<Rightarrow> (expr list * state) \<Rightarrow> bool"
+  eval :: "expr \<Rightarrow> state \<Rightarrow> security \<Rightarrow> expr \<Rightarrow> state \<Rightarrow> bool"
 where
-Skip: "eval (SKIP # E, s) (E, s)" |
-Init: "is_last_var_name s n \<Longrightarrow> eval ((INIT t n) # E, s) (E, (add_mapping s (Map t Nil)))"
+Nop: "eval (NOP, s) (NULL, s)" |
+Seq: "[eval (e1, s1) (e1', s1'), eval (e2,s1') (e2',e2)] \<Longrightarrow> eval (SEQ e1 e2, s1) (e2', s2)" |
+Seq_nop: "eval (SEQ NOP e, s) (e, s)" |
+Init: "is_last_var_name s n \<Longrightarrow> eval ((INIT t n), s) (NOP, (add_mapping s (Map t Nil)))" 
+
+
 
 (*security lemmas*)
 
 
 
 
+
+
+
+
+(* OLD STUFF *)
 
 list_length sl = n
 
