@@ -16,12 +16,11 @@ fun list_update :: "'a list \<Rightarrow> 'a \<Rightarrow> nat \<Rightarrow> 'a 
 "list_update (Cons m M) v 0 = (Cons v M)" |
 "list_update (Cons m M) v (Suc n) = (Cons m (list_update M v n))"
 
-
 type_synonym security = nat
 type_synonym var_name = nat
 datatype type = Type security
-type_synonym type_sources = "type list"
-datatype mapping = Map type type_sources
+(*type_synonym type_sources = "type list"*)
+datatype mapping = Map type (*type_sources*)
 datatype state = State "mapping list"
 
 fun add_mapping' :: "mapping list \<Rightarrow> mapping \<Rightarrow> mapping list" where
@@ -151,15 +150,27 @@ is_mapped
 (*core language*)
 
 
-datatype expr = NULL | NOP | INIT type var_name | SEQ expr expr | IF expr expr expr | SEC security expr
+datatype expr = NULL | NOP | SEQ expr expr | INIT type var_name | VALUE type 
+  | VAR var_name | ASSIGN var_name expr
 
 inductive 
   eval :: "expr \<Rightarrow> state \<Rightarrow> security \<Rightarrow> expr \<Rightarrow> state \<Rightarrow> bool"
-where
-Nop: "eval (NOP, s) (NULL, s)" |
-Seq: "[eval (e1, s1) (e1', s1'), eval (e2,s1') (e2',e2)] \<Longrightarrow> eval (SEQ e1 e2, s1) (e2', s2)" |
-Seq_nop: "eval (SEQ NOP e, s) (e, s)" |
-Init: "is_last_var_name s n \<Longrightarrow> eval ((INIT t n), s) (NOP, (add_mapping s (Map t Nil)))" 
+  where
+
+Seq: "eval e1 s1 sec1 e1' s2 \<Longrightarrow> eval e2 s2 sec2 e2' s3 
+  \<Longrightarrow> sec1 \<ge> sec3 \<Longrightarrow> sec2 \<ge> sec3 \<Longrightarrow> eval (SEQ e1 e2) s1 sec3 (SEQ e1' e2') s3" |
+
+Seq_null: "eval e' s1 sec (SEQ NULL e) s2 \<Longrightarrow> eval e' s1 sec e s2" |
+
+Nop: "eval e' s1 sec NOP s2 \<Longrightarrow> eval e' s1 sec NULL s2" |
+
+Init: "is_last_var_name s2 n \<Longrightarrow> tsec \<ge> sec \<Longrightarrow> eval e' s1 sec (INIT (Type tsec) n) s2 
+  \<Longrightarrow> eval e' s1 sec NULL (add_mapping s2 (Map (Type tsec)))" |
+
+Assign: "eval e' s1 sec (ASSIGN n e) s2 
+  \<Longrightarrow> eval (ASSIGN n e), s, sec, NULL, (update_mapping s (Map t) n)"
+
+ 
 
 
 
@@ -174,7 +185,7 @@ Init: "is_last_var_name s n \<Longrightarrow> eval ((INIT t n), s) (NOP, (add_ma
 
 (* OLD STUFF *)
 
-list_length sl = n
+(*list_length sl = n*)
 
 
 
