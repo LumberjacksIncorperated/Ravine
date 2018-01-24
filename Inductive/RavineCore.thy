@@ -151,7 +151,7 @@ is_mapped
 
 
 datatype expr = NULL | NOP | SEQ expr expr | INIT type var_name | VALUE type 
-  | VAR var_name | ASSIGN var_name expr
+  | VAR var_name | ASSIGN var_name expr | OP expr expr | IF expr expr expr | WHILE expr expr
 
 inductive 
   eval :: "expr \<Rightarrow> state \<Rightarrow> security \<Rightarrow> expr \<Rightarrow> state \<Rightarrow> bool"
@@ -167,15 +167,36 @@ Nop: "eval e' s1 sec NOP s2 \<Longrightarrow> eval e' s1 sec NULL s2" |
 Init: "is_last_var_name s2 n \<Longrightarrow> tsec \<ge> sec \<Longrightarrow> eval e' s1 sec (INIT (Type tsec) n) s2 
   \<Longrightarrow> eval e' s1 sec NULL (add_mapping s2 (Map (Type tsec)))" |
 
-Assign: "eval e' s1 sec (ASSIGN n e) s2 
-  \<Longrightarrow> eval (ASSIGN n e), s, sec, NULL, (update_mapping s (Map t) n)"
+Assign: "is_mapped (Map (Type vsec)) s3 n \<Longrightarrow> eval e' s1 sec (ASSIGN n e) s2 
+  \<Longrightarrow> eval e s2 sec (VALUE (Type tsec)) s3 \<Longrightarrow> vsec \<ge> tsec \<Longrightarrow> vsec \<ge> sec
+  \<Longrightarrow> eval e' s1 sec NULL s3" |
 
- 
+Var: "is_mapped (Map t) s n \<Longrightarrow> eval e' s1 sec (VAR n) s2 \<Longrightarrow> eval e' s1 sec (VALUE t) s2" |
 
+Op: "tsec3 = max tsec1 tsec2
+  \<Longrightarrow> eval e1 s1 sec (VALUE (Type tsec1)) s2 \<Longrightarrow> eval e2 s2 sec (VALUE (Type tsec2)) s3
+  \<Longrightarrow> eval (OP e1 e2) s1 sec (VALUE (Type tsec3)) s3" |
+
+If_then: "eval e' s' sec (IF econd ethen eelse) s1 \<Longrightarrow> eval econd s1 sec (VALUE (Type tsec)) s2 \<Longrightarrow> 
+  eval ethen s2 tsec ethen2 s3 \<Longrightarrow> eval e' s' sec ethen2 s3" |
+
+If_else: "eval e' s' sec (IF econd ethen eelse) s1 \<Longrightarrow> eval econd s1 sec (VALUE (Type tsec)) s2 \<Longrightarrow> 
+  eval eelse s2 tsec eelse2 s3 \<Longrightarrow> eval e' s' sec eelse2 s3" |
+
+While_true: "eval e' s' sec (WHILE econd eloop) s1 \<Longrightarrow> eval econd s1 sec (VALUE (Type tsec)) s2 \<Longrightarrow>
+  eval eloop s2 tsec eloop2 s3 \<Longrightarrow> eval e' s' tsec (WHILE econd eloop2) s3" |
+
+While_false: "eval e' s' sec (WHILE econd eloop) s1 \<Longrightarrow> eval econd s1 sec (VALUE (Type tsec)) s2 \<Longrightarrow>
+  eval e' s' tsec (NULL) s3"
 
 
 (*security lemmas*)
 
+lemma Seq_Sec: "\<forall>e1' e2' e1 e2 s1 s2 s1' s2' s3 s3' e3 sec1 sec2 sec3. eval e1' s1' sec1 e1 s1
+  \<longrightarrow> eval e2' s2' sec2 e2 s2 \<longrightarrow> eval (SEQ e1' e2') s3' sec3 e3 s3 \<longrightarrow> sec1 \<ge> sec3 \<and> sec2 \<ge> sec3"
+proof
+  
+  sorry
 
 
 
