@@ -20,157 +20,43 @@ fun list_update :: "'a list \<Rightarrow> 'a \<Rightarrow> nat \<Rightarrow> 'a 
 type_synonym security = nat
 type_synonym var_name = nat
 datatype type = Type security
-datatype mapping = Map type
+datatype mapping = Map var_name type
 datatype state = State "mapping list"
 
 (* Function and Inductive Definitions *)
 
-fun add_mapping' :: "mapping list \<Rightarrow> mapping \<Rightarrow> mapping list" where
-  "add_mapping' Nil m = Cons m Nil" |
-  "add_mapping' (Cons n N) m = Cons n (add_mapping' N m)" 
-
 fun add_mapping :: "state \<Rightarrow> mapping \<Rightarrow> state" where
-  "add_mapping (State sl) m = State (add_mapping' sl m)"
+  "add_mapping (State sl) m = State (m # sl)"
 
-fun update_mapping :: "state \<Rightarrow> mapping \<Rightarrow> var_name \<Rightarrow> state" where
-  "update_mapping (State l) m name = State (list_update l m name)"
+
+definition empty_state :: "state" where
+"empty_state = State []"
+
+
+(*fun update_mapping :: "state \<Rightarrow> mapping \<Rightarrow> var_name \<Rightarrow> state" where
+  "update_mapping (State l) m name = State (list_update l m name)"*)
 
 inductive 
-  is_last_var_name :: "state \<Rightarrow> var_name \<Rightarrow> bool"
+  is_mapped :: "state \<Rightarrow> var_name \<Rightarrow> type \<Rightarrow> bool"
 where
-  is_last_var_name_0: "is_last_var_name (State (Cons n Nil)) 0" |
-  is_last_var_name_S: "is_last_var_name (State N) x \<Longrightarrow> is_last_var_name (State (Cons n N)) (Suc x)"
-
-inductive 
-  is_mapped :: "mapping \<Rightarrow> state \<Rightarrow> var_name \<Rightarrow> bool"
-where
-  is_mapped_0: "is_mapped m (State (Cons m M)) 0" |
-  is_mapped_S: "is_mapped m (State M) n \<Longrightarrow> is_mapped m (State (Cons w M)) (Suc n)"
+  is_mapped_0: "is_mapped (State (Cons (Map n t) M)) n t" |
+  is_mapped_S: "n2 \<noteq> n \<Longrightarrow> is_mapped (State M) n t \<Longrightarrow> is_mapped (State (Cons (Map n2 t2) M)) n t"
 
 (* Meta Lemmas *)
 
-lemma is_last_var_name_inversion1:
-  "is_last_var_name (State (Cons n N)) (Suc x) \<Longrightarrow> is_last_var_name (State N) x"
-  using is_last_var_name.cases by blast
 
-lemma is_last_var_name_lemma_1:
-  "is_last_var_name (State Nil) x \<Longrightarrow> False" using is_last_var_name.cases by blast
-
-lemma is_last_var_name_lemma_2:
-  "is_last_var_name (State (Cons n Nil)) 0"
-  apply (rule RavineCore.is_last_var_name.intros(1))
-done
-
-lemma is_last_var_name_lemma_3:
-  "is_last_var_name (State (Cons n Nil)) x \<Longrightarrow> x = 0"
-  apply (induction x)
-  apply simp
-  apply (frule is_last_var_name_inversion1)
-  apply (frule is_last_var_name_lemma_1)
-  apply simp
-done
-
-lemma is_last_var_name_lemma_4:
-  "is_last_var_name (State N) x \<Longrightarrow> is_last_var_name (State (Cons n N)) (Suc x)"
-  apply (rule RavineCore.is_last_var_name.is_last_var_name_S)
-  apply assumption
-done
-
-(*
-lemma is_mapped_lemma_1'':
-  "\<forall> s1. add_mapping s1 m = State xa \<Longrightarrow> Ex (is_mapped m (State xa))"
-apply (induction xa)
-apply auto
-apply (rule_tac x="0" in exI)
-apply auto[1]
-apply (simp add: is_mapped_0)
-sorry
-*)
-
-lemma is_mapped_lemma_1':
-  "add_mapping (State xa) m = s2 \<Longrightarrow> Ex (is_mapped m s2)"
-  apply (induction xa arbitrary: s2)
-  using is_mapped_0 apply auto[1]
-  by (metis add_mapping'.simps(2) add_mapping.simps is_mapped.simps)
-
-lemma is_mapped_lemma_1:
-  "add_mapping s1 m = s2 \<Longrightarrow> \<exists>x. is_mapped m s2 x"
-  apply (induction s1)
-  apply (rule is_mapped_lemma_1')
-  apply auto
-done
-
-(*
-lemma is_mapped_lemma_2'':
-  "\<lbrakk>add_mapping s1 m = s2; is_last_var_name s2 x; is_mapped m s2 xa\<rbrakk> \<Longrightarrow> xa = x"
-  try
-sorry
-lemma is_mapped_lemma_2':
-  "\<lbrakk>add_mapping s1 m = s2; is_last_var_name s2 x; is_mapped m s2 xa\<rbrakk> \<Longrightarrow> is_mapped m s2 x"
-apply (frule is_mapped_lemma_2'')
-apply auto
-done*)
-(*
-lemma qweqwe: "(\<And>s1 x m.
-           add_mapping s1 m = State xa \<Longrightarrow>
-           is_last_var_name (State xa) x \<Longrightarrow> is_mapped m (State xa) x) \<Longrightarrow>
-       add_mapping s1 m = State (a # xa) \<Longrightarrow>
-       is_last_var_name (State (a # xa)) x \<Longrightarrow> is_mapped m (State (a # xa)) x"
-  try
-  sorry*)
-(*lemma qwhjweqjh: "add_mapping (State xaa) m = State xa \<Longrightarrow>
-           is_last_var_name (State xa) x \<Longrightarrow> is_mapped m (State xa) x"
-  apply (induction )
-  sorry*)
-
-(*lemma is_mapped_lemma_2': "add_mapping (State xa) m = s2 \<Longrightarrow> is_last_var_name s2 x \<Longrightarrow> is_mapped m s2 x"
-  apply (induction arbitrary: x m rule: list.induct)
-  using is_last_var_name_lemma_3 is_mapped_0 apply auto[1]
-  try  
-  
-  apply (induction xa arbitrary: s1 x m)
-  using is_last_var_name_lemma_1 apply auto[1]
-  sorry*)
-
-(*lemma asd:"\<And>a m1. (add_mapping (State m1) m = State m2 \<Longrightarrow>
-             is_last_var_name (State m2) x \<Longrightarrow> is_mapped m (State m2) x) \<Longrightarrow>
-            add_mapping (State (a # m1)) m = State m2 \<Longrightarrow>
-            is_last_var_name (State m2) x \<Longrightarrow> is_mapped m (State m2) x"
-  try
-  apply(induction m2)
-   apply(simp)
- *)
-
-lemma as: "add_mapping (State m1) m = State (a # m2) \<Longrightarrow> m = a"
-
-lemma is_mapped_lemma_2:
-  "\<lbrakk>add_mapping (State m1) m = (State m2); is_last_var_name (State m2) x\<rbrakk>
-     \<Longrightarrow> is_mapped m (State m2) x"
-  apply (induction m2)
-   apply(simp)
-    using is_last_var_name_lemma_1 apply blast
-    apply(induction m1)
-    using is_last_var_name_lemma_3 is_mapped_0 apply auto[1]
-    try
-  
-  
+lemma mapping_soundness:
+  "add_mapping s1 (Map n t) = s2 \<Longrightarrow> is_mapped s2 n t"
+  by (metis add_mapping.simps is_mapped_0 state.exhaust)
 
 
 
+lemma mapping_preservation: "n \<noteq> n2 \<Longrightarrow> is_mapped s1 n t \<Longrightarrow> 
+  add_mapping s1 (Map n2 t2) = s2 \<Longrightarrow> is_mapped s2 n t"
+  by (smt add_mapping.simps is_mapped.simps)
 
-  apply (induction s1)
-  apply ()
-
-  apply (frule is_mapped_lemma_1)
-  apply (erule exE)
-
-apply (rule is_mapped_lemma_2')
-apply auto
-  done
-
-lemma add_mapping_lemma_1:
-  "is_last_var_name (add_mapping s m) n \<Longrightarrow> is_mapped m (add_mapping s m) n"
-  by (simp add: is_mapped_lemma_2)
+lemma empty_state_existance: "\<not>(is_mapped empty_state n t)"
+  by (metis empty_state_def is_mapped.simps list.simps(3) state.inject)
 
 (* Core Language *)
 
@@ -193,18 +79,18 @@ Null: "eval NULL s sec NULL s" |
 
 Nop: "eval NOP s sec NULL s" |
 
-Init: "     is_last_var_name s n
-        \<Longrightarrow> s = (add_mapping s' (Map (Type tsec)))
+Init: "     \<not>(\<exists>t. is_mapped s' n t)
+        \<Longrightarrow> s = (add_mapping s' (Map n (Type tsec)))
         \<Longrightarrow> tsec \<ge> sec
-        \<Longrightarrow> eval (INIT (Type tsec) (Suc n)) s' sec NULL s" |
+        \<Longrightarrow> eval (INIT (Type tsec) n) s' sec NULL s" |
 
-Assign: "    is_mapped (Map (Type vsec)) s n
+Assign: "    is_mapped s n (Type vsec)
          \<Longrightarrow> eval e s' sec (VALUE (Type tsec)) s
          \<Longrightarrow> vsec \<ge> tsec
          \<Longrightarrow> vsec \<ge> sec
          \<Longrightarrow> eval (ASSIGN n e) s' sec NULL s" |
 
-Var: "is_mapped (Map t) s' n \<Longrightarrow> eval (VAR n) s' sec (VALUE t) s" |
+Var: "is_mapped s' n t \<Longrightarrow> eval (VAR n) s' sec (VALUE t) s" |
 
 Op: "    tsec3 = max tsec1 tsec2
      \<Longrightarrow> eval e1 s1 sec (VALUE (Type tsec1)) s2
@@ -239,18 +125,18 @@ lemma seq_inversion: "eval (SEQ e1' e2') s3' sec3 e3 s3 \<Longrightarrow>
   using Null by blast
 
 lemma init_inversion: "eval (INIT t vn) s' sec e s \<Longrightarrow>
-  (\<exists> tsec n. (e = NULL \<and> vn = (Suc n) \<and> t = (Type tsec) \<and> tsec \<ge> sec \<and> s = (add_mapping s' (Map (Type tsec))) \<and> is_last_var_name s n))"
+  (\<exists> tsec n. (e = NULL \<and> t = (Type tsec) \<and> tsec \<ge> sec \<and> s = (add_mapping s' (Map n (Type tsec))) \<and> \<not>(\<exists> t. is_mapped s' n t)))"
   apply (rule eval.cases)
   apply (auto)
   done
 
 lemma assign_inversion: "eval (ASSIGN n e) s' sec er s \<Longrightarrow>
-  (\<exists> vsec tsec . (er = NULL \<and> vsec \<ge> sec \<and> vsec \<ge> tsec \<and> eval e s' sec (VALUE (Type tsec)) s \<and> is_mapped (Map (Type vsec)) s n))"
+  (\<exists> vsec tsec . (er = NULL \<and> vsec \<ge> sec \<and> vsec \<ge> tsec \<and> eval e s' sec (VALUE (Type tsec)) s \<and> is_mapped s n (Type vsec)))"
   apply (rule eval.cases)
   apply (auto)
   done
 
-lemma var_inversion: "eval (VAR n) s' sec e s \<Longrightarrow> (\<exists> t. (e = (VALUE t) \<and> is_mapped (Map t) s' n))"
+lemma var_inversion: "eval (VAR n) s' sec e s \<Longrightarrow> (\<exists> t. (e = (VALUE t) \<and> is_mapped s' n t))"
   apply (rule eval.cases)
   apply auto
   done
@@ -277,23 +163,26 @@ lemma while_inversion: "eval (WHILE econd eloop) s1 tsec e sss \<Longrightarrow>
   apply auto
   done
 
+(*
 (* Completeness *)
 (*e1' \<noteq> NULL \<longrightarrow> e2' \<noteq> NULL \<longrightarrow> *)
 lemma Completeness_Seq: "eval (SEQ e1' e2') s3' sec3 e3 s3 \<Longrightarrow> 
   (\<exists>s1' sec1 e1 s1 s2' sec2 e2 s2. (eval e1' s1' sec1 e1 s1 \<and> eval e2' s2' sec2 e2 s2))"
   using seq_inversion by fastforce
+*)
 
-(* Sec Increasing *)
-lemma SecIncreasing_Seq: "eval (SEQ e1' e2') s3' sec3 e3 s3 
+
+(* Sec Increasing and Complete*)
+lemma SecIncreasingComplete_Seq: "eval (SEQ e1' e2') s3' sec3 e3 s3 
   \<Longrightarrow> (\<exists> sec1 e1 e2 sec2 s2'. (eval e1' s3' sec1 e1 s2' \<and> eval e2' s2' sec2 e2 s3 \<and> sec1 \<ge> sec3 \<and> sec2 \<ge> sec3))"
   apply(frule seq_inversion)
   apply(auto)
   apply blast+
   done
 
-lemma SecIncreasing_Assign: "\<forall>e1' e2' e1 e2 s1 s2 s1' s2' s3 s3' e3 sec1 sec2 sec3. eval e1' s1' sec1 e1 s1
-  \<longrightarrow> eval ev' s2' sec2 ev \<longrightarrow> eval (ASSIGN n ev') s' sec e s \<longrightarrow> sec1 \<ge> sec3 \<and> sec2 \<ge> sec3"
-  sorry
+lemma SecIncreasingComplete_Assign: "eval (ASSIGN n ev') s' sec e s \<Longrightarrow> 
+  (\<exists> ev' s1' sec1 e1 s1. eval ev' s1' sec1 e1 s1 \<and> sec1 \<ge> sec)"
+  by blast
 
  ASSIGN var_name expr | OP expr expr | IF expr expr expr | WHILE expr expr
 

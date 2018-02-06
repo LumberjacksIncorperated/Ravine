@@ -1,4 +1,4 @@
-theory RavineCore imports Main begin
+theory RavineCoreSplit imports Main begin
 
 (* General List Functions *)
 
@@ -141,17 +141,39 @@ lemma qweqwe: "(\<And>s1 x m.
    apply(simp)
  *)
 
-lemma as: "add_mapping (State m1) m = State (a # m2) \<Longrightarrow> m = a"
+
+lemma list_induct_reverse: "P [] \<Longrightarrow> (\<forall> n N. P (N) \<longrightarrow> P (list_append N n)) \<Longrightarrow> P Q"
+
+  sorry
+
+
+
+lemma is_mapped_lemma_2':
+  "\<forall>m1 m x. add_mapping (State m1) m = (State m2) \<longrightarrow> is_last_var_name (State m2) x
+     \<longrightarrow> is_mapped m (State m2) x"
+  apply (rule list_induct_reverse)
+   apply clarsimp
+  using is_last_var_name_lemma_1 apply auto[1]
+  apply clarsimp
+
+  
+sorry
 
 lemma is_mapped_lemma_2:
   "\<lbrakk>add_mapping (State m1) m = (State m2); is_last_var_name (State m2) x\<rbrakk>
      \<Longrightarrow> is_mapped m (State m2) x"
+
+  using is_mapped_lemma_2' by blast
+  apply (drule imp)
+  apply (rule list_induct_reverse)
+  try
+
   apply (induction m2)
    apply(simp)
     using is_last_var_name_lemma_1 apply blast
     apply(induction m1)
     using is_last_var_name_lemma_3 is_mapped_0 apply auto[1]
-    try
+    
   
   
 
