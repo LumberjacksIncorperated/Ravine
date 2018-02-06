@@ -37,25 +37,25 @@ definition empty_state :: "state" where
   "update_mapping (State l) m name = State (list_update l m name)"*)
 
 inductive 
-  is_mapped :: "state \<Rightarrow> var_name \<Rightarrow> type \<Rightarrow> bool"
+  is_mapped :: "state \<Rightarrow> mapping \<Rightarrow> bool"
 where
-  is_mapped_0: "is_mapped (State (Cons (Map n t) M)) n t" |
-  is_mapped_S: "n2 \<noteq> n \<Longrightarrow> is_mapped (State M) n t \<Longrightarrow> is_mapped (State (Cons (Map n2 t2) M)) n t"
+  is_mapped_0: "is_mapped (State (Cons (Map n t) M)) (Map n t)" |
+  is_mapped_S: "n2 \<noteq> n \<Longrightarrow> is_mapped (State M) (Map n t) \<Longrightarrow> is_mapped (State (Cons (Map n2 t2) M)) (Map n t)"
 
 (* Meta Lemmas *)
 
 
 lemma mapping_soundness:
-  "add_mapping s1 (Map n t) = s2 \<Longrightarrow> is_mapped s2 n t"
+  "add_mapping s1 (Map n t) = s2 \<Longrightarrow> is_mapped s2 (Map n t)"
   by (metis add_mapping.simps is_mapped_0 state.exhaust)
 
 
 
-lemma mapping_preservation: "n \<noteq> n2 \<Longrightarrow> is_mapped s1 n t \<Longrightarrow> 
-  add_mapping s1 (Map n2 t2) = s2 \<Longrightarrow> is_mapped s2 n t"
+lemma mapping_preservation: "n \<noteq> n2 \<Longrightarrow> is_mapped s1 (Map n t) \<Longrightarrow> 
+  add_mapping s1 (Map n2 t2) = s2 \<Longrightarrow> is_mapped s2 (Map n t)"
   by (smt add_mapping.simps is_mapped.simps)
 
-lemma empty_state_existance: "\<not>(is_mapped empty_state n t)"
+lemma empty_state_existance: "\<not>(is_mapped empty_state (Map n t))"
   by (metis empty_state_def is_mapped.simps list.simps(3) state.inject)
 
 (* Core Language *)
@@ -79,18 +79,18 @@ Null: "eval NULL s sec NULL s" |
 
 Nop: "eval NOP s sec NULL s" |
 
-Init: "     \<not>(\<exists>t. is_mapped s' n t)
+Init: "     \<not>(\<exists>t. is_mapped s' (Map n t))
         \<Longrightarrow> s = (add_mapping s' (Map n (Type tsec)))
         \<Longrightarrow> tsec \<ge> sec
         \<Longrightarrow> eval (INIT (Type tsec) n) s' sec NULL s" |
 
-Assign: "    is_mapped s n (Type vsec)
+Assign: "    is_mapped s' (Map n (Type vsec))
          \<Longrightarrow> eval e s' sec (VALUE (Type tsec)) s
          \<Longrightarrow> vsec \<ge> tsec
          \<Longrightarrow> vsec \<ge> sec
          \<Longrightarrow> eval (ASSIGN n e) s' sec NULL s" |
 
-Var: "is_mapped s' n t \<Longrightarrow> eval (VAR n) s' sec (VALUE t) s" |
+Var: "is_mapped s' (Map n t) \<Longrightarrow> eval (VAR n) s' sec (VALUE t) s" |
 
 Op: "    tsec3 = max tsec1 tsec2
      \<Longrightarrow> eval e1 s1 sec (VALUE (Type tsec1)) s2
@@ -100,19 +100,23 @@ Op: "    tsec3 = max tsec1 tsec2
 If_then: "    eval econd s1 sec (VALUE (Type tsec)) s2
           \<Longrightarrow> eval ethen s2 tsec ethen2 s3
           \<Longrightarrow> eval eelse s2 tsec eelse2 s3 
+          \<Longrightarrow> tsec \<ge> sec
           \<Longrightarrow> eval (IF econd ethen eelse) s1 sec ethen2 s3" |
 
 If_else: "    eval econd s1 sec (VALUE (Type tsec)) s2 
           \<Longrightarrow> eval ethen s2 tsec ethen2 s3 
           \<Longrightarrow> eval eelse s2 tsec eelse2 s3
+          \<Longrightarrow> tsec \<ge> sec
           \<Longrightarrow> eval (IF econd ethen eelse) s1 sec eelse2 s3" |
 
 While_true: "    eval econd s1 sec (VALUE (Type tsec)) s2
              \<Longrightarrow> eval eloop s2 tsec eloop2 s3 
+             \<Longrightarrow> sec \<ge> tsec
              \<Longrightarrow> eval (WHILE econd eloop) s1 tsec (WHILE econd eloop2) s3" |
 
 While_false: "    eval econd s1 sec (VALUE (Type tsec)) s2 
               \<Longrightarrow> eval eloop s2 tsec eloop2 s3 
+              \<Longrightarrow> sec \<ge> tsec
               \<Longrightarrow> eval (WHILE econd eloop) s1 tsec (NULL) s2"
 
 (* Inversion Lemmas *)
@@ -125,18 +129,18 @@ lemma seq_inversion: "eval (SEQ e1' e2') s3' sec3 e3 s3 \<Longrightarrow>
   using Null by blast
 
 lemma init_inversion: "eval (INIT t vn) s' sec e s \<Longrightarrow>
-  (\<exists> tsec n. (e = NULL \<and> t = (Type tsec) \<and> tsec \<ge> sec \<and> s = (add_mapping s' (Map n (Type tsec))) \<and> \<not>(\<exists> t. is_mapped s' n t)))"
+  (\<exists> tsec. (e = NULL \<and> t = (Type tsec) \<and> tsec \<ge> sec \<and> s = (add_mapping s' (Map vn (Type tsec))) \<and> \<not>(\<exists> t. is_mapped s' (Map vn t))))"
   apply (rule eval.cases)
   apply (auto)
   done
 
 lemma assign_inversion: "eval (ASSIGN n e) s' sec er s \<Longrightarrow>
-  (\<exists> vsec tsec . (er = NULL \<and> vsec \<ge> sec \<and> vsec \<ge> tsec \<and> eval e s' sec (VALUE (Type tsec)) s \<and> is_mapped s n (Type vsec)))"
+  (\<exists> vsec tsec . (er = NULL \<and> vsec \<ge> sec \<and> vsec \<ge> tsec \<and> eval e s' sec (VALUE (Type tsec)) s \<and> is_mapped s' (Map n (Type vsec))))"
   apply (rule eval.cases)
   apply (auto)
   done
 
-lemma var_inversion: "eval (VAR n) s' sec e s \<Longrightarrow> (\<exists> t. (e = (VALUE t) \<and> is_mapped s' n t))"
+lemma var_inversion: "eval (VAR n) s' sec e s \<Longrightarrow> (\<exists> t. (e = (VALUE t) \<and> is_mapped s' (Map n t)))"
   apply (rule eval.cases)
   apply auto
   done
@@ -150,14 +154,14 @@ lemma op_inversion: "eval (OP e1 e2) s1 sec e s3 \<Longrightarrow>
 
 lemma if_inversion: "eval (IF econd ethen eelse) s1 sec ethen2_or_eelse2 s3 \<Longrightarrow> 
   (\<exists>tsec s2 eelse2 ethen2. (eval econd s1 sec (VALUE (Type tsec)) s2 
-  \<and> eval eelse s2 tsec eelse2 s3 \<and> eval ethen s2 tsec ethen2 s3 \<and> 
+  \<and> tsec \<ge> sec \<and> eval eelse s2 tsec eelse2 s3 \<and> eval ethen s2 tsec ethen2 s3 \<and> 
   (ethen2_or_eelse2 = eelse2 \<or> ethen2_or_eelse2 = ethen2)))"
   apply (rule  eval.cases)
   apply auto
   done
 
 lemma while_inversion: "eval (WHILE econd eloop) s1 tsec e sss \<Longrightarrow>
-  (\<exists>s3 eloop2 sec s2.(eval econd s1 sec (VALUE (Type tsec)) s2 \<and> eval eloop s2 tsec eloop2 s3
+  (\<exists>s3 eloop2 sec s2.(eval econd s1 sec (VALUE (Type tsec)) s2 \<and> sec \<ge> tsec \<and> eval eloop s2 tsec eloop2 s3
    \<and> ((sss = s3 \<and> e = (WHILE econd eloop2)) \<or> (sss = s2 \<and> e = NULL))))"
   apply (rule  eval.cases)
   apply auto
@@ -184,38 +188,64 @@ lemma SecIncreasingComplete_Assign: "eval (ASSIGN n ev') s' sec e s \<Longrighta
   (\<exists> ev' s1' sec1 e1 s1. eval ev' s1' sec1 e1 s1 \<and> sec1 \<ge> sec)"
   by blast
 
- ASSIGN var_name expr | OP expr expr | IF expr expr expr | WHILE expr expr
+
+lemma SecIncreasingComplete_Op: "eval (OP e1' e2') s3' sec3 e3 s3 
+  \<Longrightarrow> (\<exists> sec1 e1 e2 sec2 s2' s4. (eval e1' s3' sec1 e1 s2' \<and> eval e2' s2' sec2 e2 s4 \<and> sec1 \<ge> sec3 \<and> sec2 \<ge> sec3))"
+  by (meson le_less op_inversion)
+
+
+lemma SecIncreasingComplete_If: "eval (IF e1' e2' e3') s3' sec3 e3 s3 
+  \<Longrightarrow> (\<exists> sec1 e1 e2 sec2 s2' s4 q1 q2 q3 sec. (eval e1' s3' sec1 e1 s2' \<and> eval e2' s2' sec2 e2 s4 \<and> eval e3' q1 sec q2 q3 \<and> sec1 \<ge> sec3 \<and> sec2 \<ge> sec3 \<and> sec \<ge> sec3))"
+  using if_inversion by fastforce
+
+
+lemma SecIncreasingComplete_While: "eval (WHILE e1' e2') s3' sec3 e3 s3 
+  \<Longrightarrow> (\<exists> sec1 e1 e2 sec2 s2' s4. (eval e1' s3' sec1 e1 s2' \<and> eval e2' s2' sec2 e2 s4 \<and> sec1 \<ge> sec3 \<and> sec2 \<ge> sec3))"
+  apply (frule while_inversion)
+  by blast
+  
+
+
+
+ (*
+
+datatype expr =
+  | OP expr expr | IF expr expr expr | WHILE expr expr
+
+*)
 
 (*assignment mapping*)
 
-lemma Assignment_Mapping: "\<forall>n e s' sec e2 s. eval (ASSIGN n e) s' sec e2 s \<longrightarrow> (\<exists>vsec. is_mapped (Map (Type vsec)) s' n)"
-  sorry
+lemma Assignment_Mapping: "eval (ASSIGN n e) s' sec e2 s 
+  \<Longrightarrow> (\<exists>vsec. is_mapped s' (Map n (Type vsec)))"
+  apply (frule assign_inversion)
+  apply auto
+  done
 
 (*init validity*)
 
-lemma Init_Validity: "\<forall>t n s' sec e2 s. eval (INIT t n) s' sec e2 s \<longrightarrow> is_mapped (Map t) s n"
-  sorry
+lemma Init_Validity: "eval (INIT t n) s' sec e2 s \<Longrightarrow> is_mapped s (Map n t)"
+  apply (frule init_inversion)
+  using mapping_soundness by blast
 
 (*var validity*)
 
-lemma Var_Validity: "\<forall>n s' sec t s. eval (VAR n) s' sec (VALUE t) s \<longrightarrow> is_mapped (Map t) s' n"
-  apply (auto)
-  apply (rule var_inversion)
-  apply (simp)
-  done
+lemma Var_Validity: "eval (VAR n) s' sec (VALUE t) s \<Longrightarrow> is_mapped s' (Map n t)"
+  using var_inversion by blast
 
 (*security lemmas*)
 
 
 
 
-lemma Assignment_Security: "\<forall>n e s' esec s2' s2 e2 sec s vsec e3. eval (ASSIGN n e) s' sec e3 s 
-  \<longrightarrow> eval e s2' esec e2 s2 \<longrightarrow> is_mapped (Map (Type vsec)) s' n \<longrightarrow> vsec \<ge> esec"
+lemma Assignment_Security: "eval (ASSIGN n e) s' sec e3 s 
+  \<Longrightarrow> eval e s2' esec e2 s2 \<Longrightarrow> is_mapped s' (Map n (Type vsec)) \<Longrightarrow> vsec \<ge> esec"
+  try
   sorry
 
 
-lemma Init_Security: "\<forall> tsec n s' sec e s. eval (INIT (Type tsec) n) s' sec e s \<longrightarrow> tsec \<ge> sec"
-  sorry
+lemma Init_Security: "eval (INIT (Type tsec) n) s' sec e s \<Longrightarrow> tsec \<ge> sec"
+  using init_inversion by blast
 
 
 
