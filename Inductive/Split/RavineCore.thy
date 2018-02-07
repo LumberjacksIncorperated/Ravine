@@ -42,6 +42,16 @@ where
   is_mapped_0: "is_mapped (State (Cons (Map n t) M)) (Map n t)" |
   is_mapped_S: "n2 \<noteq> n \<Longrightarrow> is_mapped (State M) (Map n t) \<Longrightarrow> is_mapped (State (Cons (Map n2 t2) M)) (Map n t)"
 
+(*is_mapped_inversion*)
+
+lemma is_mapped_inversion: "is_mapped s m \<Longrightarrow> ((\<exists> n t M. (s = (State (Cons (Map n t) M)) \<and> m = (Map n t))) 
+                                            \<or> (\<exists> n2 n M t t2. (is_mapped (State M) (Map n t) \<and> n2 \<noteq> n \<and> 
+                                                  (s = (State (Cons (Map n2 t2) M)) \<and> m = (Map n t)))))"
+  apply (rule is_mapped.cases)
+  apply blast+
+  done
+
+
 (* Meta Lemmas *)
 
 
@@ -90,7 +100,7 @@ Assign: "    is_mapped s' (Map n (Type vsec))
          \<Longrightarrow> vsec \<ge> sec
          \<Longrightarrow> eval (ASSIGN n e) s' sec NULL s" |
 
-Var: "is_mapped s' (Map n t) \<Longrightarrow> eval (VAR n) s' sec (VALUE t) s" |
+Var: "is_mapped s (Map n t) \<Longrightarrow> eval (VAR n) s sec (VALUE t) s" |
 
 Op: "    tsec3 = max tsec1 tsec2
      \<Longrightarrow> eval e1 s1 sec (VALUE (Type tsec1)) s2
@@ -98,12 +108,16 @@ Op: "    tsec3 = max tsec1 tsec2
      \<Longrightarrow> eval (OP e1 e2) s1 sec (VALUE (Type tsec3)) s3" |
 
 If_then: "    eval econd s1 sec (VALUE (Type tsec)) s2
+          \<Longrightarrow> \<not>(\<exists>t. ethen2 = (VALUE t))
+          \<Longrightarrow> \<not>(\<exists>t. eelse2 = (VALUE t))
           \<Longrightarrow> eval ethen s2 tsec ethen2 s3
           \<Longrightarrow> eval eelse s2 tsec eelse2 s3 
           \<Longrightarrow> tsec \<ge> sec
           \<Longrightarrow> eval (IF econd ethen eelse) s1 sec ethen2 s3" |
 
 If_else: "    eval econd s1 sec (VALUE (Type tsec)) s2 
+          \<Longrightarrow> \<not>(\<exists>t. ethen2 = (VALUE t))
+          \<Longrightarrow> \<not>(\<exists>t. eelse2 = (VALUE t))
           \<Longrightarrow> eval ethen s2 tsec ethen2 s3 
           \<Longrightarrow> eval eelse s2 tsec eelse2 s3
           \<Longrightarrow> tsec \<ge> sec
@@ -155,6 +169,7 @@ lemma op_inversion: "eval (OP e1 e2) s1 sec e s3 \<Longrightarrow>
 lemma if_inversion: "eval (IF econd ethen eelse) s1 sec ethen2_or_eelse2 s3 \<Longrightarrow> 
   (\<exists>tsec s2 eelse2 ethen2. (eval econd s1 sec (VALUE (Type tsec)) s2 
   \<and> tsec \<ge> sec \<and> eval eelse s2 tsec eelse2 s3 \<and> eval ethen s2 tsec ethen2 s3 \<and> 
+  \<not>(\<exists>t. ethen2 = (VALUE t)) \<and> \<not>(\<exists>t. eelse2 = (VALUE t)) \<and>
   (ethen2_or_eelse2 = eelse2 \<or> ethen2_or_eelse2 = ethen2)))"
   apply (rule  eval.cases)
   apply auto
@@ -185,8 +200,8 @@ lemma SecIncreasingComplete_Seq: "eval (SEQ e1' e2') s3' sec3 e3 s3
   done
 
 lemma SecIncreasingComplete_Assign: "eval (ASSIGN n ev') s' sec e s \<Longrightarrow> 
-  (\<exists> ev' s1' sec1 e1 s1. eval ev' s1' sec1 e1 s1 \<and> sec1 \<ge> sec)"
-  by blast
+  (\<exists> s1' sec1 e1 s1. eval ev' s' sec1 e1 s1 \<and> sec1 \<ge> sec)"
+  by (meson assign_inversion dual_order.refl)
 
 
 lemma SecIncreasingComplete_Op: "eval (OP e1' e2') s3' sec3 e3 s3 
@@ -222,6 +237,12 @@ lemma Assignment_Mapping: "eval (ASSIGN n e) s' sec e2 s
   apply auto
   done
 
+(*Assignment Expression value*)
+
+lemma Assignment_Value_Expression_Complete: "eval (ASSIGN n ev') s' sec e s \<Longrightarrow> 
+  (\<exists> t s1. eval ev' s' sec (VALUE t) s1)"
+  using assign_inversion by blast
+
 (*init validity*)
 
 lemma Init_Validity: "eval (INIT t n) s' sec e2 s \<Longrightarrow> is_mapped s (Map n t)"
@@ -233,14 +254,67 @@ lemma Init_Validity: "eval (INIT t n) s' sec e2 s \<Longrightarrow> is_mapped s 
 lemma Var_Validity: "eval (VAR n) s' sec (VALUE t) s \<Longrightarrow> is_mapped s' (Map n t)"
   using var_inversion by blast
 
+
+
+
+
+(*is_mapped determinism*)
+
+lemma is_mapped_determinism': "is_mapped (State xa) (Map n t1) \<Longrightarrow> is_mapped (State xa) (Map n t2) \<Longrightarrow> t1 = t2"
+  apply (induction xa arbitrary: n t1 t2)
+  using empty_state_def empty_state_existance apply auto[1]
+  apply (drule is_mapped_inversion)
+  apply (drule is_mapped_inversion)
+  by auto
+
+lemma is_mapped_determinism: "is_mapped s' (Map n t1) \<Longrightarrow> is_mapped s' (Map n t2) \<Longrightarrow> t1 = t2"
+  apply (induct s')
+  apply (rule is_mapped_determinism')
+  apply simp+
+  done
+
+
+
+(*value determinism*)
+
+lemma value_determinism: "eval e s' sec1 (VALUE t1) s1 \<Longrightarrow> eval e s' sec2 (VALUE t2) s2 \<Longrightarrow> t1 = t2"
+  apply (induction e arbitrary: s' sec1 sec2 s1 s2 t1 t2)
+  
+  apply simp+
+  using Var_Validity is_mapped_determinism apply blast
+  
+  apply simp
+  apply (drule op_inversion)
+  apply (drule op_inversion)
+  
+             
+           
+  sorry
+
+
+
+
+
 (*security lemmas*)
 
 
-lemma Assignment_Security: "eval (ASSIGN n e) s' sec e3 s 
-   \<Longrightarrow> (\<exists>s2' esec e2 s2 vsec. eval e s2' esec e2 s2 \<and> is_mapped s' (Map n (Type vsec)) \<and> vsec \<ge> esec)"
-   using assign_inversion by blast
 
 
-lemma Init_Security: "eval (INIT (Type tsec) n) s' sec e s \<Longrightarrow> tsec \<ge> sec"
+lemma Assignment_Security_Type': "eval (ASSIGN n e) s' sec e3 s 
+   \<Longrightarrow> (\<exists> vsec ve. eval e s' sec (VALUE (Type ve)) s \<and> is_mapped s' (Map n (Type vsec)) \<and> vsec \<ge> ve)"
+  using assign_inversion by blast
+
+
+
+
+lemma Assignment_Security_Type: "eval (ASSIGN n e) s' sec e3 s \<Longrightarrow> eval e s' sec (VALUE (Type ve)) s
+   \<Longrightarrow> is_mapped s' (Map n (Type vsec)) \<Longrightarrow> vsec \<ge> ve"
+  by (metis assign_inversion is_mapped_determinism type.inject value_determinism)
+
+
+lemma Assignment_Security_Context: "eval (ASSIGN n e) s' sec e3 s \<Longrightarrow> is_mapped s' (Map n (Type vsec)) \<Longrightarrow> vsec \<ge> sec"
+  using assign_inversion is_mapped_determinism by blast
+
+lemma Init_Security_Context: "eval (INIT (Type tsec) n) s' sec e s \<Longrightarrow> tsec \<ge> sec"
   using init_inversion by blast
 
