@@ -1,24 +1,43 @@
 theory RavineCore imports Main begin
 
-(* General List Functions *)
+(*----------------------------------------------------------------------------------------------------*)
+(*                                        General List Functions                                      *)
+(*----------------------------------------------------------------------------------------------------*)
 
+(*
+  List Length - Recurses down the list one element at a time
+*)
 fun list_length :: "'a list \<Rightarrow> nat" where
   "list_length Nil = 0" |
   "list_length (Cons n N) = Suc (list_length N)"
 
+(*
+  List Append - Appends an element to the innermost element position
+*)
 fun list_append :: "'a list \<Rightarrow> 'a \<Rightarrow> 'a list" where
   "list_append Nil a = Cons a Nil" |
   "list_append (Cons n N) a = Cons n (list_append N a)"
 
+(*
+  List Update - Changes list entry for corresponding variable 
+*)
 fun list_update :: "'a list \<Rightarrow> 'a \<Rightarrow> nat \<Rightarrow> 'a list" where
   "list_update Nil _ _ = Nil" |
   "list_update (Cons m M) v 0 = (Cons v M)" |
   "list_update (Cons m M) v (Suc n) = (Cons m (list_update M v n))"
 
-(* Created Data Types For Language *)
 
+(*----------------------------------------------------------------------------------------------------*)
+(*                                    Created Data Types For Language                                 *)
+(*----------------------------------------------------------------------------------------------------*)
+
+(* Security Level for Variable/Operation *)
 type_synonym security = nat
+
+(* Variable name is represented as an Natural Number *)
 type_synonym var_name = nat
+
+(* The Security Type of a Variable/Expression *)
 datatype type = Type security
 datatype mapping = Map var_name type
 datatype state = State "mapping list"
@@ -77,17 +96,17 @@ inductive
   eval :: "expr \<Rightarrow> state \<Rightarrow> security \<Rightarrow> expr \<Rightarrow> state \<Rightarrow> bool"
   where
 
-Seq: "    eval e1 s1 sec1 e1' s2 
-      \<Longrightarrow> eval e2 s2 sec2 e2' s3 
-      \<Longrightarrow> sec1 \<ge> sec3 
-      \<Longrightarrow> sec2 \<ge> sec3 
-      \<Longrightarrow> eval (SEQ e1 e2) s1 sec3 (SEQ e1' e2') s3" |
-
-Seq_null: "eval (SEQ NULL NULL) s sec NULL s" |
+Constant: "eval (VALUE t) s sec (VALUE t) s" |
 
 Null: "eval NULL s sec NULL s" |
 
 Nop: "eval NOP s sec NULL s" |
+
+Seq: "    eval e1 s1 sec1 NULL s2 
+      \<Longrightarrow> eval e2 s2 sec2 NULL s3 
+      \<Longrightarrow> sec1 \<ge> sec3 
+      \<Longrightarrow> sec2 \<ge> sec3 
+      \<Longrightarrow> eval (SEQ e1 e2) s1 sec3 NULL s3" |
 
 Init: "     \<not>(\<exists>t. is_mapped s' (Map n t))
         \<Longrightarrow> s = (add_mapping s' (Map n (Type tsec)))
@@ -108,39 +127,41 @@ Op: "    tsec3 = max tsec1 tsec2
      \<Longrightarrow> eval (OP e1 e2) s1 sec (VALUE (Type tsec3)) s3" |
 
 If_then: "    eval econd s1 sec (VALUE (Type tsec)) s2
-          \<Longrightarrow> \<not>(\<exists>t. ethen2 = (VALUE t))
-          \<Longrightarrow> \<not>(\<exists>t. eelse2 = (VALUE t))
-          \<Longrightarrow> eval ethen s2 tsec ethen2 s3
-          \<Longrightarrow> eval eelse s2 tsec eelse2 s3 
+          \<Longrightarrow> eval ethen s2 tsec NULL s3
+          \<Longrightarrow> eval eelse s2 tsec NULL s4 
           \<Longrightarrow> tsec \<ge> sec
-          \<Longrightarrow> eval (IF econd ethen eelse) s1 sec ethen2 s3" |
+          \<Longrightarrow> eval (IF econd ethen eelse) s1 sec NULL s3" |
 
 If_else: "    eval econd s1 sec (VALUE (Type tsec)) s2 
-          \<Longrightarrow> \<not>(\<exists>t. ethen2 = (VALUE t))
-          \<Longrightarrow> \<not>(\<exists>t. eelse2 = (VALUE t))
-          \<Longrightarrow> eval ethen s2 tsec ethen2 s3 
-          \<Longrightarrow> eval eelse s2 tsec eelse2 s3
+          \<Longrightarrow> eval ethen s2 tsec NULL s3 
+          \<Longrightarrow> eval eelse s2 tsec NULL s4
           \<Longrightarrow> tsec \<ge> sec
-          \<Longrightarrow> eval (IF econd ethen eelse) s1 sec eelse2 s3" |
+          \<Longrightarrow> eval (IF econd ethen eelse) s1 sec NULL s4" |
 
+While: "eval (IF econd (SEQ eloop (WHILE econd eloop)) NULL) s' sec NULL s
+  \<Longrightarrow> eval (WHILE econd eloop) s' sec NULL s"
+
+(*
 While_true: "    eval econd s1 sec (VALUE (Type tsec)) s2
-             \<Longrightarrow> eval eloop s2 tsec eloop2 s3 
+             \<Longrightarrow> eval eloop s2 tsec NULL s3 
              \<Longrightarrow> sec \<ge> tsec
-             \<Longrightarrow> eval (WHILE econd eloop) s1 tsec (WHILE econd eloop2) s3" |
+             \<Longrightarrow> eval (WHILE econd eloop) s1 tsec (WHILE econd eloop) s3" |
 
 While_false: "    eval econd s1 sec (VALUE (Type tsec)) s2 
-              \<Longrightarrow> eval eloop s2 tsec eloop2 s3 
+              \<Longrightarrow> eval eloop s2 tsec NULL s3 
               \<Longrightarrow> sec \<ge> tsec
               \<Longrightarrow> eval (WHILE econd eloop) s1 tsec (NULL) s2"
+*)
+
+
 
 (* Inversion Lemmas *)
 
 lemma seq_inversion: "eval (SEQ e1' e2') s3' sec3 e3 s3 \<Longrightarrow> 
-  (\<exists>sec1 e1 s4 sec2 e2. (eval e1' s3' sec1 e1 s4 \<and> eval e2' s4 sec2 e2 s3 \<and> sec1 \<ge> sec3 \<and> sec2 \<ge> sec3))"
+  (\<exists>sec1  s4 sec2 . (eval e1' s3' sec1 NULL s4 \<and> eval e2' s4 sec2 NULL s3 \<and> sec1 \<ge> sec3 \<and> sec2 \<ge> sec3))"
   apply (rule eval.cases)
   apply (auto)
-  apply blast+
-  using Null by blast
+  done
 
 lemma init_inversion: "eval (INIT t vn) s' sec e s \<Longrightarrow>
   (\<exists> tsec. (e = NULL \<and> t = (Type tsec) \<and> tsec \<ge> sec \<and> s = (add_mapping s' (Map vn (Type tsec))) \<and> \<not>(\<exists> t. is_mapped s' (Map vn t))))"
@@ -167,20 +188,27 @@ lemma op_inversion: "eval (OP e1 e2) s1 sec e s3 \<Longrightarrow>
   done
 
 lemma if_inversion: "eval (IF econd ethen eelse) s1 sec ethen2_or_eelse2 s3 \<Longrightarrow> 
-  (\<exists>tsec s2 eelse2 ethen2. (eval econd s1 sec (VALUE (Type tsec)) s2 
-  \<and> tsec \<ge> sec \<and> eval eelse s2 tsec eelse2 s3 \<and> eval ethen s2 tsec ethen2 s3 \<and> 
-  \<not>(\<exists>t. ethen2 = (VALUE t)) \<and> \<not>(\<exists>t. eelse2 = (VALUE t)) \<and>
-  (ethen2_or_eelse2 = eelse2 \<or> ethen2_or_eelse2 = ethen2)))"
+  (\<exists>tsec s2 eelse2 ethen2 s5 s6. (eval econd s1 sec (VALUE (Type tsec)) s2 
+  \<and> tsec \<ge> sec \<and> eval eelse s2 tsec NULL s5 \<and> eval ethen s2 tsec NULL s6 \<and> (s5 = s3 \<or> s6 = s3)))"
   apply (rule  eval.cases)
   apply auto
   done
 
+lemma while_inversion: "eval (WHILE econd eloop) s' sec e s \<Longrightarrow>
+  (e = NULL \<and> eval (IF econd (SEQ eloop (WHILE econd eloop)) NULL) s' sec NULL s)"
+  apply (rule  eval.cases)
+  apply auto
+  done
+
+(*
 lemma while_inversion: "eval (WHILE econd eloop) s1 tsec e sss \<Longrightarrow>
-  (\<exists>s3 eloop2 sec s2.(eval econd s1 sec (VALUE (Type tsec)) s2 \<and> sec \<ge> tsec \<and> eval eloop s2 tsec eloop2 s3
+  (\<exists>s3 sec eloop2 s2.(eval econd s1 sec (VALUE (Type tsec)) s2 \<and> sec \<ge> tsec \<and> eval eloop s2 tsec NULL s3
    \<and> ((sss = s3 \<and> e = (WHILE econd eloop2)) \<or> (sss = s2 \<and> e = NULL))))"
   apply (rule  eval.cases)
   apply auto
   done
+*)
+
 
 (*
 (* Completeness *)
@@ -210,14 +238,16 @@ lemma SecIncreasingComplete_Op: "eval (OP e1' e2') s3' sec3 e3 s3
 
 
 lemma SecIncreasingComplete_If: "eval (IF e1' e2' e3') s3' sec3 e3 s3 
-  \<Longrightarrow> (\<exists> sec1 e1 e2 sec2 s2' s4 q1 q2 q3 sec. (eval e1' s3' sec1 e1 s2' \<and> eval e2' s2' sec2 e2 s4 \<and> eval e3' q1 sec q2 q3 \<and> sec1 \<ge> sec3 \<and> sec2 \<ge> sec3 \<and> sec \<ge> sec3))"
+  \<Longrightarrow> (\<exists> sec1 e1 sec2 s2' s4 q1 q3 sec. (eval e1' s3' sec1 e1 s2' \<and> eval e2' s2' sec2 NULL s4 \<and> eval e3' q1 sec NULL q3 \<and> sec1 \<ge> sec3 \<and> sec2 \<ge> sec3 \<and> sec \<ge> sec3))"
   using if_inversion by fastforce
 
 
 lemma SecIncreasingComplete_While: "eval (WHILE e1' e2') s3' sec3 e3 s3 
   \<Longrightarrow> (\<exists> sec1 e1 e2 sec2 s2' s4. (eval e1' s3' sec1 e1 s2' \<and> eval e2' s2' sec2 e2 s4 \<and> sec1 \<ge> sec3 \<and> sec2 \<ge> sec3))"
   apply (frule while_inversion)
-  by blast
+  apply clarsimp
+  apply (frule if_inversion)
+  by (meson le_trans order_refl seq_inversion)
   
 
 
@@ -277,7 +307,15 @@ lemma is_mapped_determinism: "is_mapped s' (Map n t1) \<Longrightarrow> is_mappe
 
 (*value determinism*)
 
+
+lemma asjkhqwjkhge: "eval NULL s' sec1 (VALUE t1) s1 \<Longrightarrow> eval NULL s' sec2 (VALUE t2) s2 \<Longrightarrow> t1 = t2"
+  try
+  sorry
+
 lemma value_determinism: "eval e s' sec1 (VALUE t1) s1 \<Longrightarrow> eval e s' sec2 (VALUE t2) s2 \<Longrightarrow> t1 = t2"
+  apply (induction e arbitrary: s' sec1 sec2 s1 s2 t1 t2)
+  try
+  
   apply (induction e arbitrary: s' sec1 sec2 s1 s2 t1 t2)
   
   apply simp+
