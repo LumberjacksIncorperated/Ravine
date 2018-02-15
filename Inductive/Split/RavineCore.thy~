@@ -1,24 +1,43 @@
 theory RavineCore imports Main begin
 
-(* General List Functions *)
+(*----------------------------------------------------------------------------------------------------*)
+(*                                        General List Functions                                      *)
+(*----------------------------------------------------------------------------------------------------*)
 
+(*
+  List Length - Recurses down the list one element at a time
+*)
 fun list_length :: "'a list \<Rightarrow> nat" where
   "list_length Nil = 0" |
   "list_length (Cons n N) = Suc (list_length N)"
 
+(*
+  List Append - Appends an element to the innermost element position
+*)
 fun list_append :: "'a list \<Rightarrow> 'a \<Rightarrow> 'a list" where
   "list_append Nil a = Cons a Nil" |
   "list_append (Cons n N) a = Cons n (list_append N a)"
 
+(*
+  List Update - Changes list entry for corresponding variable 
+*)
 fun list_update :: "'a list \<Rightarrow> 'a \<Rightarrow> nat \<Rightarrow> 'a list" where
   "list_update Nil _ _ = Nil" |
   "list_update (Cons m M) v 0 = (Cons v M)" |
   "list_update (Cons m M) v (Suc n) = (Cons m (list_update M v n))"
 
-(* Created Data Types For Language *)
 
+(*----------------------------------------------------------------------------------------------------*)
+(*                                    Created Data Types For Language                                 *)
+(*----------------------------------------------------------------------------------------------------*)
+
+(* Security Level for Variable/Operation *)
 type_synonym security = nat
+
+(* Variable name is represented as an Natural Number *)
 type_synonym var_name = nat
+
+(* The Security Type of a Variable/Expression *)
 datatype type = Type security
 datatype mapping = Map var_name type
 datatype state = State "mapping list"

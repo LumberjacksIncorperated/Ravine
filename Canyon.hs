@@ -31,24 +31,42 @@ isJust :: Maybe a -> Bool
 isJust Nothing = False
 isJust _ = True
 
+isNothing :: Maybe a -> Bool
+isNothing Nothing = True
+isNothing _ = False
+
+
+-- default -> list -> index
+item_at_index :: a -> [a] -> Int -> a
+item_at_index d [] _ = d
+item_at_index d (x:xs) n | (n <= 0) = x
+                         | (n > 0) = item_at_index d xs (n-1)
+
+
+
+
 add_mapping :: State -> Mapping -> State
 add_mapping (State sl) m = State (m : sl)
 
 apply_to_map_modal_object :: State -> Varname -> (Model_obj_map -> Model_obj_map) -> State
-apply_to_map_modal_object s _ _ = s
+apply_to_map_modal_object (State []) _ _ = (State [])
+apply_to_map_modal_object (State ((Map mobj n1 t):xs)) n2 f | (n1 == n2) = (State ((Map (f mobj) n1 t):xs))
+apply_to_map_modal_object (State (x:xs)) n f = let (State xsr) = (apply_to_map_modal_object (State xs) n f) in (State (x:(xsr)))
+
 
 get_mapping :: State -> Varname -> Maybe Mapping
-get_mapping _ _ = Nothing
+get_mapping (State []) _ = Nothing
+get_mapping (State ((Map mobj n1 t):xs)) n2 | (n1 == n2) = Just ((Map mobj n1 t))
+get_mapping (State (x:xs)) n = get_mapping (State xs) n
 
 -----------------------------------------------------------------------------------------------------
 -- MONADIC LANGUAGE DATATYPE
 -----------------------------------------------------------------------------------------------------
-data Obj = O deriving Show
 
-type Model_obj_map = Obj
-type Model_obj_value = Obj
-type Model_obj_init = Obj
-type Model_obj_op = Obj
+type Model_obj_map = Model_obj_map_canyon
+type Model_obj_value = Model_obj_value_canyon
+type Model_obj_init = Model_obj_init_canyon
+type Model_obj_op = Model_obj_op_canyon
 
 -----------------------------------------------------------------------------------------------------
 -- CORE LANGUAGE DATATYPE
@@ -65,25 +83,26 @@ base_security = 0
 
 data Expr = NULL | NOP | SEQ Expr Expr | INIT Model_obj_init TYPE Varname | VALUE Model_obj_value TYPE 
   | VAR Varname | ASSIGN Varname Expr | OP Model_obj_op Expr Expr | IF Expr Expr Expr | WHILE Expr Expr 
+  | RAISE Security Expr
   | EXPR_ERROR String      deriving Show
 
 -----------------------------------------------------------------------------------------------------
 -- MONADIC FUNCTION DEFINITIONS
 -----------------------------------------------------------------------------------------------------
 modal_eval_assign :: Model_obj_value -> Model_obj_map -> Model_obj_map
-modal_eval_assign _ _ = O
+modal_eval_assign = modal_eval_assign_canyon
 
 modal_eval_init :: Model_obj_init -> Model_obj_map
-modal_eval_init _ = O
+modal_eval_init = modal_eval_init_canyon
 
 modal_eval_op :: Model_obj_op -> Model_obj_value -> Model_obj_value -> Model_obj_value
-modal_eval_op _ _ _ = O
+modal_eval_op = modal_eval_op_canyon
 
 modal_eval_branch :: Model_obj_value -> Bool
-modal_eval_branch _ = True
+modal_eval_branch = modal_eval_branch_canyon
 
 modal_eval_value :: Model_obj_map -> Model_obj_value
-modal_eval_value _ = O
+modal_eval_value = modal_eval_value_canyon
 
 -----------------------------------------------------------------------------------------------------
 -- CORE FUNCTION DECLARATIONS
@@ -119,6 +138,9 @@ eval_step NULL s sec = (NULL, s)
 
 eval_step NOP s sec = (NULL, s)
 
+eval_step (RAISE secr NULL) s' sec | (secr >= sec) = (NULL, s')
+eval_step (RAISE secr e) s' sec | (secr >= sec) = let (er1, sr1) = eval_step e s' secr in (RAISE secr er1, sr1)
+
 eval_step (SEQ NULL NULL) s sec = (NULL, s) 
 eval_step (SEQ NULL e2) s sec = eval_step e2 s sec
 eval_step (SEQ e1 e2) s sec = let (er1, sr1) = eval_step e1 s sec in (SEQ er1 e2, sr1)
@@ -149,24 +171,160 @@ eval_step _ s _ = (EXPR_ERROR "trash program (Some trash wrote trash...)", s)
 -----------------------------------------------------------------------------------------------------
 -- HIGHER LANGUAGE FUNCTION DECLARATIONS
 -----------------------------------------------------------------------------------------------------
-exec_canyon' :: Int -> (Expr, State) -> (Expr, State)
-exec_canyon' n (e, s) 
+exec_core' :: Int -> (Expr, State) -> (Expr, State)
+exec_core' n (e, s) 
                   | n <= 0 = (e, s)
-                  | n > 0 = exec_canyon' (n-1) (eval_step e s 0)
+                  | n > 0 = exec_core' (n-1) (eval_step e s 0)
 
-exec_canyon :: Expr -> Int -> (Expr, State)
-exec_canyon e n = exec_canyon' n (e, empty_state)
+exec_core :: Expr -> Int -> (Expr, State)
+exec_core e n = exec_core' n (e, empty_state)
+
+
+-----------------------------------------------------------------------------------------------------
+-- TOP LEVEL LANGUAGE
+-----------------------------------------------------------------------------------------------------
+
+
+type Variable = String
+type SecurityLevel = Int
+
+data CanyonType = C_Bool | C_Int | C_Char | C_List CanyonType     deriving Show
+
+data CanyonValue = CL_Bool Bool | CL_Int Int | CL_Char Char | CL_List [CanyonValue] | CL_Null   deriving (Eq, Show)
+
+data CanyonOp = Not | Eq | Gr | Le | Plus | Concat | Append | Index   deriving Show
+
+data CanyonExpr = Dave | Block [CanyonExpr] | Init SecurityLevel CanyonType Variable | Assign SecurityLevel Variable CanyonExpr 
+                    | Const SecurityLevel CanyonValue | Var Variable
+                    | If SecurityLevel CanyonExpr CanyonExpr CanyonExpr | While SecurityLevel CanyonExpr CanyonExpr
+                    | Un CanyonOp CanyonExpr | Bin CanyonOp CanyonExpr CanyonExpr    deriving Show
+
+
+
+data CanyonCompilationStatus = Success | Failure String deriving (Show, Eq)
+
+data CanyonCompilationState = CCS Varname [Variable]
+empty_canyon_compilation_state = CCS 0 []
+
+new_variable_mapping :: CanyonCompilationState -> Variable -> (CanyonCompilationState, Maybe Varname)
+new_variable_mapping st v = (st, Nothing)
+
+
+
+
+compile_canyon' :: CanyonCompilationState -> CanyonExpr -> (CanyonCompilationStatus, CanyonCompilationState, Expr)
+
+compile_canyon' st (Dave) = (Success, st, NULL)
+
+compile_canyon' st (Block []) = (Success, st, NULL)
+compile_canyon' st (Block (x:xs)) =   let (x_s, x_st, x_e) = compile_canyon' st x in 
+                                     if (x_s /= Success) then (x_s, x_st, NULL) else (
+                                        let (xs_s, xs_st, xs_e) = compile_canyon' x_st (Block xs) in
+                                           if (xs_s /= Success) then (xs_s, xs_st, NULL) else (Success, xs_st, SEQ x_e xs_e)
+                                     )
+
+compile_canyon' st' (Init sec t v) =  let (st, maybe_vn) = new_variable_mapping st' v in  
+                                          if (isNothing maybe_vn) then (Failure ("Variable initilised twice - " ++ v), st, NULL) else (
+                                              let (Just vn) = maybe_vn in (Success, st, INIT (CI t CL_Null) (Type sec) vn)
+                                          )
+
+
+compile_canyon' st (Const sec v) = (Success, st, VALUE (CV v) (Type sec))
+
+
+compile_canyon' st _ = (Failure "Dave", st, NULL)
+
+
+
+
+
+
+compile_canyon :: CanyonExpr -> (CanyonCompilationStatus, Expr)
+compile_canyon e = let (status, state, expr) = compile_canyon' empty_canyon_compilation_state e in (status, expr)
+
+
+
+
+
+-----------------------------------------------------------------------------------------------------
+-- CONCREATE MONADIC DEFINITIOANS
+-----------------------------------------------------------------------------------------------------
+
+
+--data Obj = O deriving Show
+
+
+
+data Model_obj_map_canyon = CM CanyonType CanyonValue deriving Show
+data Model_obj_value_canyon = CV CanyonValue deriving (Eq, Show)
+data Model_obj_init_canyon = CI CanyonType CanyonValue deriving Show
+data Model_obj_op_canyon = CO CanyonOp deriving Show
+
+
+
+
+
+modal_eval_assign_canyon :: Model_obj_value_canyon -> Model_obj_map_canyon -> Model_obj_map_canyon
+modal_eval_assign_canyon (CV v) (CM t _) = (CM t v)
+
+modal_eval_init_canyon :: Model_obj_init_canyon -> Model_obj_map_canyon
+modal_eval_init_canyon (CI t v) = (CM t v)
+
+
+modal_eval_op_canyon :: Model_obj_op_canyon -> Model_obj_value_canyon -> Model_obj_value_canyon -> Model_obj_value_canyon
+
+modal_eval_op_canyon (CO Not) (CV (CL_Bool True)) _ = (CV (CL_Bool False))
+modal_eval_op_canyon (CO Not) _ _ = (CV (CL_Bool True))
+
+modal_eval_op_canyon (CO Eq) v1 v2 = (CV (CL_Bool (v1 == v2)))
+
+modal_eval_op_canyon (CO Gr) (CV (CL_Int i1)) (CV (CL_Int i2)) = (CV (CL_Bool (i1 > i2)))
+
+modal_eval_op_canyon (CO Le) (CV (CL_Int i1)) (CV (CL_Int i2)) = (CV (CL_Bool (i1 < i2)))
+
+modal_eval_op_canyon (CO Plus) (CV (CL_Int i1)) (CV (CL_Int i2)) = (CV (CL_Int (i1 + i2)))
+
+modal_eval_op_canyon (CO Concat) (CV (CL_List l1)) (CV (CL_List l2)) = (CV (CL_List (l1 ++ l2)))
+
+modal_eval_op_canyon (CO Append) (CV (CL_List l1)) (CV v) = (CV (CL_List (l1 ++ [v])))
+
+modal_eval_op_canyon (CO Index) (CV (CL_List l)) (CV (CL_Int index)) = (CV (item_at_index (CL_Null) l index))
+
+modal_eval_op_canyon _ _ _ = CV (CL_Null)
+
+
+
+modal_eval_branch_canyon :: Model_obj_value_canyon -> Bool
+modal_eval_branch_canyon (CV (CL_Bool True)) = True
+modal_eval_branch_canyon _ = False
+
+modal_eval_value_canyon :: Model_obj_map_canyon -> Model_obj_value_canyon
+modal_eval_value_canyon (CM _ v) = CV v
+
+
+
+
+--	NULL | NOP | SEQ Expr Expr | INIT Model_obj_init TYPE Varname | VALUE Model_obj_value TYPE 
+ -- | VAR Varname | ASSIGN Varname Expr | OP Model_obj_op Expr Expr | IF Expr Expr Expr | WHILE Expr Expr 
+ -- | EXPR_ERROR String      deriving Show
+
 
 -----------------------------------------------------------------------------------------------------
 -- TEST DRIVER
 -----------------------------------------------------------------------------------------------------
-program_test = OP O (OP O ((VALUE O (Type 2))) (VALUE O (Type 6))) (VALUE O (Type 99))
+--program_test = OP O (OP O ((VALUE O (Type 2))) (VALUE O (Type 6))) (VALUE O (Type 99))
 
-program_result = exec_canyon program_test 2
+--program_result = exec_core program_test 2
+
+canyon_program = (Const 55 (CL_Int 23))
+canyon_program2 = Block (Dave : (Const 55 (CL_Int 23)) : Dave : [])
 
 main = do
     putStrLn ""  
-    putStrLn (show (program_result))
+    --putStrLn (show (program_result))
+    --putStrLn (show (Block [Init 3 C_Bool "Hello"]))
+    --putStrLn (show (compile_canyon canyon_program))
+    putStrLn (show (compile_canyon canyon_program2))
     putStrLn ""
 
 

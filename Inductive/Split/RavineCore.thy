@@ -91,6 +91,7 @@ lemma empty_state_existance: "\<not>(is_mapped empty_state (Map n t))"
 
 datatype expr = NULL | NOP | SEQ expr expr | INIT type var_name | VALUE type 
   | VAR var_name | ASSIGN var_name expr | OP expr expr | IF expr expr expr | WHILE expr expr
+  | RAISE security expr
 
 inductive 
   eval :: "expr \<Rightarrow> state \<Rightarrow> security \<Rightarrow> expr \<Rightarrow> state \<Rightarrow> bool"
@@ -101,6 +102,9 @@ Constant: "eval (VALUE t) s sec (VALUE t) s" |
 Null: "eval NULL s sec NULL s" |
 
 Nop: "eval NOP s sec NULL s" |
+
+Raise: "secr \<ge> sec \<Longrightarrow> eval e s' secr NULL s \<Longrightarrow> 
+        eval (RAISE secr e) s' sec NULL s" |
 
 Seq: "    eval e1 s1 sec1 NULL s2 
       \<Longrightarrow> eval e2 s2 sec2 NULL s3 
@@ -220,6 +224,16 @@ lemma Completeness_Seq: "eval (SEQ e1' e2') s3' sec3 e3 s3 \<Longrightarrow>
 
 
 (* Sec Increasing and Complete*)
+
+
+lemma SecIncreasingComplete_Raise: "eval (RAISE secr e) s' sec er s 
+  \<Longrightarrow> (\<exists> sec2. (eval e s' sec2 NULL s \<and> er = NULL \<and> sec2 \<ge> secr \<and> secr \<ge> sec))"
+  apply (rule eval.cases)
+  apply auto
+  done
+
+
+
 lemma SecIncreasingComplete_Seq: "eval (SEQ e1' e2') s3' sec3 e3 s3 
   \<Longrightarrow> (\<exists> sec1 e1 e2 sec2 s2'. (eval e1' s3' sec1 e1 s2' \<and> eval e2' s2' sec2 e2 s3 \<and> sec1 \<ge> sec3 \<and> sec2 \<ge> sec3))"
   apply(frule seq_inversion)
