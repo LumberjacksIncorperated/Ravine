@@ -156,12 +156,9 @@ eval_step (OP mobjop (VALUE mobj1 (Type tsec1)) (VALUE mobj2 (Type tsec2))) s se
 eval_step (OP mobjop (VALUE mobj1 (Type tsec1)) e2') s' sec = let (e2, s) = eval_step e2' s' sec in (OP mobjop (VALUE mobj1 (Type tsec1)) e2, s)
 eval_step (OP mobjop e1' e2') s' sec = let (e1, s) = eval_step e1' s' sec in (OP mobjop e1 e2', s)
 
-eval_step (IF (VALUE mobj (Type tsec)) NULL NULL) s sec | (tsec >= sec && modal_eval_branch mobj == True) = (NULL, s)
-eval_step (IF (VALUE mobj (Type tsec)) NULL eelse') s' sec | (tsec >= sec && modal_eval_branch mobj == True) = let (eelse, s) = eval_step eelse' s' tsec in (IF (VALUE mobj (Type tsec)) NULL eelse, s')
-eval_step (IF (VALUE mobj (Type tsec)) ethen' eelse') s' sec | (tsec >= sec && modal_eval_branch mobj == True) = let (ethen, s) = eval_step ethen' s' tsec in (IF (VALUE mobj (Type tsec)) ethen eelse', s)
-eval_step (IF (VALUE mobj (Type tsec)) NULL NULL) s sec | (tsec >= sec && modal_eval_branch mobj == False) = (NULL, s)
-eval_step (IF (VALUE mobj (Type tsec)) NULL eelse') s' sec | (tsec >= sec && modal_eval_branch mobj == False) = let (eelse, s) = eval_step eelse' s' tsec in (IF (VALUE mobj (Type tsec)) NULL eelse, s)
-eval_step (IF (VALUE mobj (Type tsec)) ethen' eelse') s' sec | (tsec >= sec && modal_eval_branch mobj == False) = let (ethen, s) = eval_step ethen' s' tsec in (IF (VALUE mobj (Type tsec)) ethen eelse', s')
+
+eval_step (IF (VALUE mobj (Type tsec)) ethen eelse) s sec | (tsec >= sec && modal_eval_branch mobj == True) = (ethen, s)
+eval_step (IF (VALUE mobj (Type tsec)) ethen eelse) s sec | (tsec >= sec && modal_eval_branch mobj == False) = (eelse, s)
 eval_step (IF expr' ethen' eelse') s' sec = let (expr, s) = eval_step expr' s' sec in (IF expr ethen' eelse', s)
 
 eval_step (WHILE econd eloop) s' sec = (IF econd (SEQ eloop (WHILE econd eloop)) NULL, s')
@@ -194,7 +191,7 @@ data CanyonValue = CL_Bool Bool | CL_Int Int | CL_Char Char | CL_List [CanyonVal
 
 data CanyonOp = Not | Eq | Gr | Le | Plus | Concat | Append | Index   deriving Show
 
-data CanyonExpr = Dave | Block [CanyonExpr] | Init SecurityLevel CanyonType Variable | Assign SecurityLevel Variable CanyonExpr 
+data CanyonExpr = Dave | Jimmy | Block [CanyonExpr] | Init SecurityLevel CanyonType Variable | Assign SecurityLevel Variable CanyonExpr 
                     | Const SecurityLevel CanyonValue | Var Variable
                     | If SecurityLevel CanyonExpr CanyonExpr CanyonExpr | While SecurityLevel CanyonExpr CanyonExpr
                     | Un CanyonOp CanyonExpr | Bin CanyonOp CanyonExpr CanyonExpr    deriving Show
@@ -207,7 +204,14 @@ data CanyonCompilationState = CCS Varname [Variable]
 empty_canyon_compilation_state = CCS 0 []
 
 new_variable_mapping :: CanyonCompilationState -> Variable -> (CanyonCompilationState, Maybe Varname)
-new_variable_mapping st v = (st, Nothing)
+new_variable_mapping (CCS nextN ls) v = if ((get_variable_mapping (CCS nextN ls) v) /= Nothing) then ((CCS nextN ls), Nothing)
+                                            else ((CCS (nextN+1) (v:ls)), Just nextN)
+
+
+get_variable_mapping :: CanyonCompilationState -> Variable -> Maybe Varname
+get_variable_mapping (CCS 0 []) _ = Nothing
+get_variable_mapping (CCS n (y1:ys)) y2 | (y1 == y2) = Just (n-1)
+get_variable_mapping (CCS n (y:ys)) v = get_variable_mapping (CCS (n-1) (ys)) v
 
 
 
@@ -215,6 +219,7 @@ new_variable_mapping st v = (st, Nothing)
 compile_canyon' :: CanyonCompilationState -> CanyonExpr -> (CanyonCompilationStatus, CanyonCompilationState, Expr)
 
 compile_canyon' st (Dave) = (Success, st, NULL)
+compile_canyon' st (Jimmy) = (Success, st, NOP)
 
 compile_canyon' st (Block []) = (Success, st, NULL)
 compile_canyon' st (Block (x:xs)) =   let (x_s, x_st, x_e) = compile_canyon' st x in 
@@ -229,10 +234,62 @@ compile_canyon' st' (Init sec t v) =  let (st, maybe_vn) = new_variable_mapping 
                                           )
 
 
+
+compile_canyon' st' (Assign sec v e') =   let (s, st, e) = compile_canyon' st' e' in
+                                             if (s /= Success) then (s, st, NULL) else (
+                                                let maybe_vn = get_variable_mapping st v in
+                                                   if (isNothing maybe_vn) then (Failure ("Variable not initilised - " ++ v), st, NULL) else (
+                                                       let (Just vn) = maybe_vn in (Success, st', RAISE sec (ASSIGN vn e))
+                                                    )
+                                             )
+
+
 compile_canyon' st (Const sec v) = (Success, st, VALUE (CV v) (Type sec))
 
 
-compile_canyon' st _ = (Failure "Dave", st, NULL)
+compile_canyon' st (Var v) =  let maybe_vn = get_variable_mapping st v in
+                                 if (isNothing maybe_vn) then (Failure ("Variable not initilised - " ++ v), st, NULL) else (
+                                    let (Just vn) = maybe_vn in (Success, st, VAR vn)
+                                 )
+
+
+compile_canyon' st (If sec e1' e2' e3') =  let (s_e1, st_e1, e1) = compile_canyon' st e1' in 
+                                               if (s_e1 /= Success) then (s_e1, st_e1, NULL) else (
+                                                  let (s_e2, st_e2, e2) = compile_canyon' st e2' in 
+                                                     if (s_e2 /= Success) then (s_e2, st_e2, NULL) else (
+                                                        let (s_e3, st_e3, e3) = compile_canyon' st e3' in 
+                                                           if (s_e3 /= Success) then (s_e3, st_e3, NULL) else (
+                                                              (Success, st, RAISE sec (IF e1 e2 e3))
+                                                           )
+                                                     )
+                                               )
+
+
+compile_canyon' st (While sec e1' e2') =      let (s_e1, st_e1, e1) = compile_canyon' st e1' in 
+                                                 if (s_e1 /= Success) then (s_e1, st_e1, NULL) else (
+                                                    let (s_e2, st_e2, e2) = compile_canyon' st e2' in 
+                                                       if (s_e2 /= Success) then (s_e2, st_e2, NULL) else (
+                                                          (Success, st, RAISE sec (WHILE e1 e2))
+                                                       )
+                                                 )
+
+
+compile_canyon' st (Bin cop e1' e2') =        let (s_e1, st_e1, e1) = compile_canyon' st e1' in 
+                                                 if (s_e1 /= Success) then (s_e1, st_e1, NULL) else (
+                                                    let (s_e2, st_e2, e2) = compile_canyon' st e2' in 
+                                                       if (s_e2 /= Success) then (s_e2, st_e2, NULL) else (
+                                                          (Success, st, OP (CO cop) e1 e2)
+                                                       )
+                                                 )
+
+compile_canyon' st (Un cop e1') =             let (s_e1, st_e1, e1) = compile_canyon' st e1' in 
+                                                 if (s_e1 /= Success) then (s_e1, st_e1, NULL) else (
+                                                    (Success, st, OP (CO cop) e1 (VALUE (CV CL_Null) (Type base_security)))
+                                                 )
+
+
+
+--compile_canyon' st _ = (Failure "Dave", st, NULL)
 
 
 
@@ -318,13 +375,19 @@ modal_eval_value_canyon (CM _ v) = CV v
 
 canyon_program = (Const 55 (CL_Int 23))
 canyon_program2 = Block (Dave : (Const 55 (CL_Int 23)) : Dave : [])
-
+cp3cpo = Block ((If 0 (Const 0 (CL_Bool True)) (Jimmy) (Dave)) : [])
+(cp3cpo_s, cp3cpo_e) = (compile_canyon cp3cpo)
 main = do
     putStrLn ""  
     --putStrLn (show (program_result))
     --putStrLn (show (Block [Init 3 C_Bool "Hello"]))
     --putStrLn (show (compile_canyon canyon_program))
-    putStrLn (show (compile_canyon canyon_program2))
+    putStrLn (show cp3cpo)
+    putStrLn (show cp3cpo_e)
+    putStrLn (show (exec_core cp3cpo_e 1))
+    putStrLn (show (exec_core cp3cpo_e 2))
+    putStrLn (show (exec_core cp3cpo_e 3))
+    putStrLn (show (exec_core cp3cpo_e 4))
     putStrLn ""
 
 
