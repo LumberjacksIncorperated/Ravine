@@ -7,4 +7,7 @@
 
 \f0\fs24 \cf0 For each language construct (node in the AST), eval_step first attempts to reduce each sub expression until we retrieve the results required in the preconditions of the inductive definitions. Finally, once and if we have successfully reduced the sub expressions after successive applications of eval_step, and the required preconditions are met, the language construct (node) is reduced into a final result and becomes a leaf in the AST.\
 In this way the AST is reduced bottom up and from left to right as eval_step is successively applied. eval_step then conforms to the inductive definition as successive applications of eval_step cause a given program to approach the result of a full reduction as defined by the big step semantics.\
-}
+\
+\
+\
+External operations can be defined by combining core operations and by directly accessing or modifying modal data stored within the core state between applications of eval_step. For example, the GetChar operation is executed by defining in the core language; setting a flag, then assigning a variable with data from a previously defined getChar object, then resetting the flag. The char from getChar is injected directly into the state at a higher level after the setting of the flag, and before the assignment of the data.}
