@@ -1,0 +1,10 @@
+{\rtf1\ansi\ansicpg1252\cocoartf1504\cocoasubrtf600
+{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;\csgray\c100000;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww10800\viewh8400\viewkind0
+\pard\tx566\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 For each language construct (node in the AST), eval_step first attempts to reduce each sub expression until we retrieve the results required in the preconditions of the inductive definitions. Finally, once and if we have successfully reduced the sub expressions after successive applications of eval_step, and the required preconditions are met, the language construct (node) is reduced into a final result and becomes a leaf in the AST.\
+In this way the AST is reduced bottom up and from left to right as eval_step is successively applied. eval_step then conforms to the inductive definition as successive applications of eval_step cause a given program to approach the result of a full reduction as defined by the big step semantics.\
+}
