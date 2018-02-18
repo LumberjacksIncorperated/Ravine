@@ -74,9 +74,9 @@ type Model_obj_op = Model_obj_op_canyon
 type Security = Int
 type Varname = Int
 
-data TYPE = Type Security deriving Show
-data Mapping = Map Model_obj_map Varname TYPE deriving Show
-data State = State [Mapping] deriving Show
+data TYPE = Type Security deriving (Eq, Show)
+data Mapping = Map Model_obj_map Varname TYPE deriving (Eq, Show)
+data State = State [Mapping] deriving (Eq, Show)
 
 empty_state = State []
 base_security = 0
@@ -84,7 +84,7 @@ base_security = 0
 data Expr = NULL | NOP | SEQ Expr Expr | INIT Model_obj_init TYPE Varname | VALUE Model_obj_value TYPE 
   | VAR Varname | ASSIGN Varname Expr | OP Model_obj_op Expr Expr | IF Expr Expr Expr | WHILE Expr Expr 
   | RAISE Security Expr
-  | EXPR_ERROR String      deriving Show
+  | EXPR_ERROR String      deriving (Eq, Show)
 
 -----------------------------------------------------------------------------------------------------
 -- MONADIC FUNCTION DEFINITIONS
@@ -168,12 +168,37 @@ eval_step _ s _ = (EXPR_ERROR "trash program (Some trash wrote trash...)", s)
 -----------------------------------------------------------------------------------------------------
 -- HIGHER LANGUAGE FUNCTION DECLARATIONS
 -----------------------------------------------------------------------------------------------------
-exec_core' :: Int -> (Expr, State) -> (Expr, State)
-exec_core' n (e, s) 
-                  | n <= 0 = (e, s)
-                  | n > 0 = exec_core' (n-1) (eval_step e s 0)
 
-exec_core :: Expr -> Int -> (Expr, State)
+
+
+
+
+
+exec_core' :: Int -> (Expr, State) -> IO (Expr, State)
+exec_core' n (NULL, s) = return (NULL, s)
+exec_core' n (e, s) 
+                  | n <= 0 = do return (e, s)
+                  | n > 0 = do 
+                              let getchar_deuehbhjqwdhvq = get_mapping s meta_GetChar_vn
+                              if (getchar_deuehbhjqwdhvq /= Nothing) then do
+                                 let (Just (Map (CM d1 (value)) d2 d3)) = getchar_deuehbhjqwdhvq
+                                 if (value == (CL_Bool True)) then do
+                                    in_char <- getChar
+                                    retval <- (exec_core' (n-1) (eval_step e (apply_to_map_modal_object s meta_GetChar_vn (modal_eval_assign_canyon ((CV (CL_Char in_char))))) 0))
+                                    return retval
+                                 else do
+                                    retval <- (exec_core' (n-1) (eval_step e s 0))
+                                    return retval
+                              else do
+                                 retval <- (exec_core' (n-1) (eval_step e s 0))
+                                 return retval
+
+                              
+
+                              --retval <- 
+                              --return retval
+
+exec_core :: Expr -> Int -> IO (Expr, State)
 exec_core e n = exec_core' n (e, empty_state)
 
 
@@ -185,23 +210,31 @@ exec_core e n = exec_core' n (e, empty_state)
 type Variable = String
 type SecurityLevel = Int
 
-data CanyonType = C_Bool | C_Int | C_Char | C_List CanyonType     deriving Show
+data CanyonType = C_Bool | C_Int | C_Char | C_List CanyonType     deriving (Eq, Show)
 
 data CanyonValue = CL_Bool Bool | CL_Int Int | CL_Char Char | CL_List [CanyonValue] | CL_Null   deriving (Eq, Show)
 
-data CanyonOp = Not | Eq | Gr | Le | Plus | Concat | Append | Index   deriving Show
+data CanyonOp = Not | Eq | Gr | Le | Plus | Concat | Append | Index   deriving (Eq, Show)
 
 data CanyonExpr = Dave | Jimmy | Block [CanyonExpr] | Init SecurityLevel CanyonType Variable | Assign SecurityLevel Variable CanyonExpr 
                     | Const SecurityLevel CanyonValue | Var Variable
                     | If SecurityLevel CanyonExpr CanyonExpr CanyonExpr | While SecurityLevel CanyonExpr CanyonExpr
-                    | Un CanyonOp CanyonExpr | Bin CanyonOp CanyonExpr CanyonExpr    deriving Show
-
-
+                    | Un CanyonOp CanyonExpr | Bin CanyonOp CanyonExpr CanyonExpr    
+                    | GetChar SecurityLevel Variable    deriving Show
 
 data CanyonCompilationStatus = Success | Failure String deriving (Show, Eq)
 
 data CanyonCompilationState = CCS Varname [Variable]
 empty_canyon_compilation_state = CCS 0 []
+
+
+
+meta_GetChar = "GetChar_Meta"
+meta_GetChar_vn = 0
+
+initial_canyon_compilation_state = CCS 1 [meta_GetChar]
+initial_canyon_compilation_expr = (INIT (CI C_Char CL_Null) (Type base_security) meta_GetChar_vn)
+
 
 new_variable_mapping :: CanyonCompilationState -> Variable -> (CanyonCompilationState, Maybe Varname)
 new_variable_mapping (CCS nextN ls) v = if ((get_variable_mapping (CCS nextN ls) v) /= Nothing) then ((CCS nextN ls), Nothing)
@@ -216,7 +249,22 @@ get_variable_mapping (CCS n (y:ys)) v = get_variable_mapping (CCS (n-1) (ys)) v
 
 
 
+
+compile_canyon :: CanyonExpr -> (CanyonCompilationStatus, Expr)
+compile_canyon e = let (status, state, expr) = compile_canyon' initial_canyon_compilation_state e in (status, SEQ initial_canyon_compilation_expr expr)
+
+
+
+
+
 compile_canyon' :: CanyonCompilationState -> CanyonExpr -> (CanyonCompilationStatus, CanyonCompilationState, Expr)
+
+compile_canyon' st (GetChar sec v) =   let maybe_vn = get_variable_mapping st v in
+                                             if (isNothing maybe_vn) then (Failure ("Variable not initilised - " ++ v), st, NULL) else (
+                                                  let (Just vn) = maybe_vn in (Success, st, SEQ (SEQ (ASSIGN meta_GetChar_vn (VALUE (CV (CL_Bool True)) (Type base_security))) (RAISE sec (ASSIGN vn (VAR meta_GetChar_vn)))) (ASSIGN meta_GetChar_vn (VALUE (CV (CL_Null)) (Type base_security))))
+                                             )
+                                             
+
 
 compile_canyon' st (Dave) = (Success, st, NULL)
 compile_canyon' st (Jimmy) = (Success, st, NOP)
@@ -296,8 +344,6 @@ compile_canyon' st (Un cop e1') =             let (s_e1, st_e1, e1) = compile_ca
 
 
 
-compile_canyon :: CanyonExpr -> (CanyonCompilationStatus, Expr)
-compile_canyon e = let (status, state, expr) = compile_canyon' empty_canyon_compilation_state e in (status, expr)
 
 
 
@@ -312,10 +358,11 @@ compile_canyon e = let (status, state, expr) = compile_canyon' empty_canyon_comp
 
 
 
-data Model_obj_map_canyon = CM CanyonType CanyonValue deriving Show
+data Model_obj_map_canyon = CM CanyonType CanyonValue deriving (Eq, Show)
 data Model_obj_value_canyon = CV CanyonValue deriving (Eq, Show)
-data Model_obj_init_canyon = CI CanyonType CanyonValue deriving Show
-data Model_obj_op_canyon = CO CanyonOp deriving Show
+data Model_obj_init_canyon = CI CanyonType CanyonValue deriving (Eq, Show)
+data Model_obj_op_canyon = CO CanyonOp deriving (Eq, Show)
+
 
 
 
@@ -373,22 +420,30 @@ modal_eval_value_canyon (CM _ v) = CV v
 
 --program_result = exec_core program_test 2
 
-canyon_program = (Const 55 (CL_Int 23))
-canyon_program2 = Block (Dave : (Const 55 (CL_Int 23)) : Dave : [])
-cp3cpo = Block ((If 0 (Const 0 (CL_Bool True)) (Jimmy) (Dave)) : [])
-(cp3cpo_s, cp3cpo_e) = (compile_canyon cp3cpo)
+canyon_program = Block (Init 0 C_Char "x" : GetChar 0 "x" : (If 0 (Const 0 (CL_Bool True)) (Jimmy) (Dave)) : [])
+
+
+--(Const 55 (CL_Int 23))
+--canyon_program2 = Block (Dave : (Const 55 (CL_Int 23)) : Dave : [])
+--(_, cp3cpo_e) = Block ((If 0 (Const 0 (CL_Bool True)) (Jimmy) (Dave)) : [])
+(canyon_program_s, canyon_program_e) = (compile_canyon canyon_program)
+
+main :: IO ()
 main = do
     putStrLn ""  
     --putStrLn (show (program_result))
     --putStrLn (show (Block [Init 3 C_Bool "Hello"]))
     --putStrLn (show (compile_canyon canyon_program))
-    putStrLn (show cp3cpo)
-    putStrLn (show cp3cpo_e)
-    putStrLn (show (exec_core cp3cpo_e 1))
-    putStrLn (show (exec_core cp3cpo_e 2))
-    putStrLn (show (exec_core cp3cpo_e 3))
-    putStrLn (show (exec_core cp3cpo_e 4))
+    
+    --putStrLn (show canyon_program)
+    --putStrLn (show canyon_program_e)
+    vvv <- (exec_core canyon_program_e 10000)
+    putStrLn (show vvv)
+    --putStrLn (show (exec_core canyon_program_e 2))
+    --putStrLn (show (exec_core canyon_program_e 3))
+    --putStrLn (show (exec_core canyon_program_e 4))
     putStrLn ""
+
 
 
 
