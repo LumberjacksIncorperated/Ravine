@@ -43,8 +43,6 @@ item_at_index d (x:xs) n | (n <= 0) = x
                          | (n > 0) = item_at_index d xs (n-1)
 
 
-
-
 add_mapping :: State -> Mapping -> State
 add_mapping (State sl) m = State (m : sl)
 
@@ -169,11 +167,6 @@ eval_step _ s _ = (EXPR_ERROR "trash program (Some trash wrote trash...)", s)
 -- HIGHER LANGUAGE FUNCTION DECLARATIONS
 -----------------------------------------------------------------------------------------------------
 
-
-
-
-
-
 exec_core' :: Int -> (Expr, State) -> IO (Expr, State)
 exec_core' n (NULL, s) = return (NULL, s)
 exec_core' n (e, s) 
@@ -206,7 +199,6 @@ exec_core e n = exec_core' n (e, empty_state)
 -- TOP LEVEL LANGUAGE
 -----------------------------------------------------------------------------------------------------
 
-
 type Variable = String
 type SecurityLevel = Int
 
@@ -228,7 +220,6 @@ data CanyonCompilationState = CCS Varname [Variable]
 empty_canyon_compilation_state = CCS 0 []
 
 
-
 meta_GetChar = "GetChar_Meta"
 meta_GetChar_vn = 0
 
@@ -247,14 +238,8 @@ get_variable_mapping (CCS n (y1:ys)) y2 | (y1 == y2) = Just (n-1)
 get_variable_mapping (CCS n (y:ys)) v = get_variable_mapping (CCS (n-1) (ys)) v
 
 
-
-
-
 compile_canyon :: CanyonExpr -> (CanyonCompilationStatus, Expr)
 compile_canyon e = let (status, state, expr) = compile_canyon' initial_canyon_compilation_state e in (status, SEQ initial_canyon_compilation_expr expr)
-
-
-
 
 
 compile_canyon' :: CanyonCompilationState -> CanyonExpr -> (CanyonCompilationStatus, CanyonCompilationState, Expr)
@@ -264,7 +249,6 @@ compile_canyon' st (GetChar sec v) =   let maybe_vn = get_variable_mapping st v 
                                                   let (Just vn) = maybe_vn in (Success, st, SEQ (SEQ (ASSIGN meta_GetChar_vn (VALUE (CV (CL_Bool True)) (Type base_security))) (RAISE sec (ASSIGN vn (VAR meta_GetChar_vn)))) (ASSIGN meta_GetChar_vn (VALUE (CV (CL_Null)) (Type base_security))))
                                              )
                                              
-
 
 compile_canyon' st (Dave) = (Success, st, NULL)
 compile_canyon' st (Jimmy) = (Success, st, NOP)
@@ -336,37 +320,14 @@ compile_canyon' st (Un cop e1') =             let (s_e1, st_e1, e1) = compile_ca
                                                  )
 
 
-
---compile_canyon' st _ = (Failure "Dave", st, NULL)
-
-
-
-
-
-
-
-
-
-
-
 -----------------------------------------------------------------------------------------------------
 -- CONCREATE MONADIC DEFINITIOANS
 -----------------------------------------------------------------------------------------------------
-
-
---data Obj = O deriving Show
-
-
 
 data Model_obj_map_canyon = CM CanyonType CanyonValue deriving (Eq, Show)
 data Model_obj_value_canyon = CV CanyonValue deriving (Eq, Show)
 data Model_obj_init_canyon = CI CanyonType CanyonValue deriving (Eq, Show)
 data Model_obj_op_canyon = CO CanyonOp deriving (Eq, Show)
-
-
-
-
-
 
 modal_eval_assign_canyon :: Model_obj_value_canyon -> Model_obj_map_canyon -> Model_obj_map_canyon
 modal_eval_assign_canyon (CV v) (CM t _) = (CM t v)
@@ -397,7 +358,6 @@ modal_eval_op_canyon (CO Index) (CV (CL_List l)) (CV (CL_Int index)) = (CV (item
 modal_eval_op_canyon _ _ _ = CV (CL_Null)
 
 
-
 modal_eval_branch_canyon :: Model_obj_value_canyon -> Bool
 modal_eval_branch_canyon (CV (CL_Bool True)) = True
 modal_eval_branch_canyon _ = False
@@ -405,26 +365,17 @@ modal_eval_branch_canyon _ = False
 modal_eval_value_canyon :: Model_obj_map_canyon -> Model_obj_value_canyon
 modal_eval_value_canyon (CM _ v) = CV v
 
-
-
-
---	NULL | NOP | SEQ Expr Expr | INIT Model_obj_init TYPE Varname | VALUE Model_obj_value TYPE 
- -- | VAR Varname | ASSIGN Varname Expr | OP Model_obj_op Expr Expr | IF Expr Expr Expr | WHILE Expr Expr 
- -- | EXPR_ERROR String      deriving Show
-
-
 -----------------------------------------------------------------------------------------------------
 -- TEST DRIVER
 -----------------------------------------------------------------------------------------------------
 --program_test = OP O (OP O ((VALUE O (Type 2))) (VALUE O (Type 6))) (VALUE O (Type 99))
 
 --program_result = exec_core program_test 2
-
 canyon_program = Block (Init 0 C_Char "x" : GetChar 0 "x" : (If 0 (Const 0 (CL_Bool True)) (Jimmy) (Dave)) : [])
 
 
 --(Const 55 (CL_Int 23))
---canyon_program2 = Block (Dave : (Const 55 (CL_Int 23)) : Dave : [])
+-- canyon_program2 = Block (Dave : (Const 55 (CL_Int 23)) : Dave : [])
 --(_, cp3cpo_e) = Block ((If 0 (Const 0 (CL_Bool True)) (Jimmy) (Dave)) : [])
 (canyon_program_s, canyon_program_e) = (compile_canyon canyon_program)
 
@@ -434,7 +385,7 @@ main = do
     --putStrLn (show (program_result))
     --putStrLn (show (Block [Init 3 C_Bool "Hello"]))
     --putStrLn (show (compile_canyon canyon_program))
-    
+
     --putStrLn (show canyon_program)
     --putStrLn (show canyon_program_e)
     vvv <- (exec_core canyon_program_e 10000)

@@ -1,0 +1,29 @@
+
+
+
+data CanyonExpr = Dave | Jimmy | Block [CanyonExpr] | Init SecurityLevel CanyonType Variable | Assign SecurityLevel Variable CanyonExpr 
+                    | Const SecurityLevel CanyonValue | Var Variable
+                    | If SecurityLevel CanyonExpr CanyonExpr CanyonExpr | While SecurityLevel CanyonExpr CanyonExpr
+                    | Un CanyonOp CanyonExpr | Bin CanyonOp CanyonExpr CanyonExpr    
+                    | GetChar SecurityLevel Variable    deriving Show
+
+
+init[4] int x;
+assign[4] x (expr);
+Dave;
+Jimmy;
+if[5] () {
+	
+
+} else {
+	
+}
+
+while[4] () }
+
+}
+
+
+parse_stmt_block
+
+parse_expr
